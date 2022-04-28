@@ -1,0 +1,90 @@
+---
+title: "assignment week 07"
+author: "Deni Hodzic"
+output: html_document
+date: '2022-04-13'
+---
+
+```{r}
+suppressPackageStartupMessages({
+  library(epiwraps)
+  library(AnnotationHub)
+  library(MotifDb)
+  library(memes)
+  library(universalmotif)
+  library(ensembldb)
+  library(ggplot2)
+})
+ah <- AnnotationHub()
+ensdb <- ah[["AH89211"]]
+```
+
+
+## Download the data
+
+```{r, eval=FALSE}
+download.file("https://ethz-ins.org/content/w7/atac.chr19.bam", "atac.chr19.bam", mode="wb")
+download.file("https://ethz-ins.org/content/w7/atac.chr19.bam.bai", "atac.chr19.bam.bai", mode="wb")
+```
+
+
+## Preparing tracks
+
+```{r}
+bam <- "atac.chr19.bam"
+
+# create a track using all fragments, computing the coverage at each position (and force Ensembl naming)
+bam2bw(bam, output_bw = "full_cov.bw", paired=TRUE, binWidth=1L, forceSeqlevelsStyle = "Ensembl")
+
+# create a track using all fragments, but computing the number of cuts/insertion sites at each position
+bam2bw(bam, output_bw = "full_cuts.bw", paired=TRUE, binWidth=1L, type="ends", forceSeqlevelsStyle = "Ensembl")
+# create a track using only nucleosome-free fragments, computing coverage
+bam2bw(bam, output_bw = "NF_cov.bw", paired=TRUE, binWidth=1L, minFragLength=30, 
+       maxFragLength=115, forceSeqlevelsStyle = "Ensembl")
+# create a track using only nucleosome-free fragments, computing cuts
+bam2bw(bam, output_bw = "NF_cuts.bw", paired=TRUE, binWidth=1L, minFragLength=30,
+       maxFragLength=115, type="ends", forceSeqlevelsStyle = "Ensembl")
+# create a track using only mono-nucleosome fragments, computing coverage
+bam2bw(bam, output_bw = "mono_cov.bw", paired=TRUE, binWidth=1L, minFragLength=130,
+       maxFragLength=220, forceSeqlevelsStyle = "Ensembl")
+# create a track using only mono-nucleosome fragments, computing cuts
+bam2bw(bam, output_bw = "mono_cuts.bw", paired=TRUE, binWidth=1L, minFragLength=130,
+       maxFragLength=220, type="ends", forceSeqlevelsStyle = "Ensembl")
+```
+
+
+## Obtaining the sites with a CTCF motif
+
+```{r}
+# get GCR sites
+motif <- query(MotifDb, c("GCR","Mus"))[[1]]
+genome <- ah[["AH68356"]]
+# get the sequence for chromosome 19:
+chr19 <- GRanges("19", IRanges(1L,seqlengths(genome)["19"]))
+chr19 <- setNames(getSeq(genome, chr19), "19")
+# an alternative way would have been just import(genome)["19"]
+
+# find motifs
+motifs <- findMotifInstances(chr19, motif)
+# findMotifInstances gives you a GRanges object, which we need for the overlapsAny!
+accessible_regions <- callPeaks("atac.chr19.bam")
+seqlevelsStyle(accessible_regions) <- "Ensembl"
+accessible_motifs <- motifs[overlapsAny(motifs, accessible_regions)]
+hist(accessible_motifs$score)
+```
+
+## Plotting signal around the motif occurences
+
+```{r}
+# we prepare the list of tracks
+tracks <- c("Full cuts"="full_cuts.bw", "NF coverage"="NF_cov.bw", "NF cuts"="NF_cuts.bw","Mono cov"="mono_cov.bw", "Mono cuts"="mono_cuts.bw")
+# extract signals around the motif occurences
+# we zoom in to 500bp around the motif centers, in windows of 5bp
+sm <- signal2Matrix(tracks, accessible_motifs, w=5, extend=500)
+# plot the signals:
+plotEnrichedHeatmaps(sm, trim=0.95)
+# we renormalize using border backgrounds
+smb <- renormalizeBorders(sm)
+plotEnrichedHeatmaps(smb, trim=0.95)
+```
+Estimated time of completion: 1.5 h
