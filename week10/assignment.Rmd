@@ -62,7 +62,7 @@ tracks <- c("Adult liver 1"=promoterRegionslrep1,
 mlraw <- signal2Matrix(tracks, dmrRanges, extend=1000, w=20, type="scale", smooth=FALSE)
 plotEnrichedHeatmaps(mlraw, scale_title="Proportion\nmethylated", axis_name = c("TSS","TES"), colors = c("white","red"))
 ```
-This heatmap turned out to not really show anything, I don't know what I did wrong.
+I had difficulties here because "object "dmrRanges" is not found".
 
 ### smoothing
 Smoothing is done separately for each sample, only using the data where the coverage (for that sample) is non-zero. This estimates a genome-wide methylation profile, which is then evaluated in all CpGs in the BSseq object. As a result, after smoothing, every CpG in the object has an estimated methylation value. This is very nice for the situation where you want to compare a single CpG across multiple samples, but one or two of the samples have zero coverage by chance. But note that these smoothed methylation profiles makes less sense in the parts of the genome where there are no covered CpGs nearby. We fix this by removing these CpGs after smoothing, see below. (from the bsseq vignette)
